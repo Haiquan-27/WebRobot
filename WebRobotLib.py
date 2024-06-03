@@ -69,10 +69,10 @@ class WebRobot():
 			headers = self.headers
 
 		_request = None
+
 		if method.upper()=="GET":
 			_request = request.Request(
 				url = "%s?%s"%(url,parse.urlencode(args,encoding=encoding)) if args!={} else url,
-				data = {},
 				headers = headers,
 				origin_req_host = None,
 				unverifiable = False,
@@ -85,7 +85,7 @@ class WebRobot():
 			# post_log(url+str(args))
 			_request = request.Request(
 				url = url,
-				data = bytes(parse.urlencode(args,encoding=encoding),encoding='UTF8'),
+				data = bytes(parse.urlencode(args,encoding=encoding),encoding='UTF8') if isinstance(args,dict) else bytes(args,encoding="UTF8"),
 				headers = headers,
 				origin_req_host = None,
 				unverifiable = False,
@@ -105,8 +105,8 @@ class WebRobot():
 		
 		res = {
 			"status":_response.status,
-			"headers":_response.getheaders(),
-			"content":self.decodeHtml(_response.read()),
+			"headers":{header[0]: header[1] for header in _response.getheaders()},
+			"content":self.decodeHtml(_response.read(),encoding),
 			"reason":_response.reason
 		}
 		return res
