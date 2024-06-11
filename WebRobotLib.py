@@ -1,4 +1,5 @@
 from urllib import request,parse
+from urllib.parse import urlparse
 from http import cookiejar
 import ssl
 from io import BytesIO
@@ -7,7 +8,7 @@ import random
 import time
 
 __version = "0.1"
-__all__ = ["WebRobot"]
+__all__ = ["WebRobot","decompose_url"]
 
 class WebRobot():
 	def __init__(self):
@@ -32,13 +33,13 @@ class WebRobot():
 			request.HTTPHandler(),
 			request.HTTPSHandler(context=self.ssl_verify)
 		]
-		self.cookie_file = "cookie.txt" ; self._cookiejar=None ; self.loadCookie()
+		self.cookie_file = "cookie.txt" ; self._cookiejar = None ; self.loadCookie()
 		self._global_proxy_enable = False ; self.global_proxy_enable = self._global_proxy_enable
 
 	@property
 	def global_proxy_enable(self):
 		return self._global_proxy_enable
-		
+
 	@global_proxy_enable.setter
 	def global_proxy_enable(self,enable):
 		""" 选择是否启用代理,self.global_proxy设置代理 """
@@ -46,9 +47,9 @@ class WebRobot():
 			self._global_proxy_enable = enable
 		else:
 			raise TypeError("args 'enable' should be <bool> not <%s>"%(type(enable)))
-		if enable == True:
+		if enable:
 			self.setHandler(request.ProxyHandler(self.global_proxy))
-		elif enable == False:
+		else:
 			self.setHandler(request.ProxyHandler({}))
 
 	def openUrl(self,url="",args={},method="GET",encoding=None,headers=None,timeout=None,proxy_list=[],handlers=None):
@@ -56,29 +57,27 @@ class WebRobot():
 		url:		请求的地址,如使用GET可直接包含参数无需args
 		args:		参数字典
 		method:		请求方法[GET/POST]
-		encoding:	用于对rul字符进行编码,不设置则使用self.default_encodeing
+		encoding:	用于对rul字符进行编码,不设置则使用self.default_encodeing,设为False返回原始数据
 		headers,	请求头字典,不设置则使用self.headers
 		timeout,	超时检测,若超时返回timeouterrorm,不设置则使用self.timeout
 		proxy_list,	随机代理列表(未测试)
 		handlers	自定义urllib.request.HTTPHandler()对象,不设置则使用self.handlers
 		"""
-		if encoding == None:
-			encoding = self.default_encodeing
+		encoding = encoding if encoding else self.default_encodeing
 
-		if headers == None:
-			headers = self.headers
+		headers = headers if headers else self.headers
 
 		_request = None
 
-		if method.upper()=="GET":
+		if method.upper() == "GET":
 			_request = request.Request(
-				url = "%s?%s"%(url,parse.urlencode(args,encoding=encoding)) if args!={} else url,
+				url = "%s?%s"%(url,parse.urlencode(args,encoding=encoding)) if args != {} else url,
 				headers = headers,
 				origin_req_host = None,
 				unverifiable = False,
 				method = 'GET'
-				)
-		elif method.upper()=="POST":
+			)
+		elif method.upper() == "POST":
 			# sleep_time = random.randrange(4,5)
 			# print(sleep_time,"s ....")
 			# time.sleep(sleep_time)
@@ -90,37 +89,37 @@ class WebRobot():
 				origin_req_host = None,
 				unverifiable = False,
 				method = 'POST'
-				)
+			)
 
 		proxy = None
-		if proxy_list!=[]:
+		if proxy_list != []:
 			proxy = random.choice(proxy_list)
 
-		if handlers == None:
+		if not handlers:
 			handlers = self.handlers
 		opener = request.build_opener(*handlers)
-		if timeout == None:
+		if timeout:
 			timeout = self.timeout
 		_response = opener.open(_request,timeout=timeout)
-		
+
 		res = {
 			"status":_response.status,
 			"headers":{header[0]: header[1] for header in _response.getheaders()},
-			"content":self.decodeHtml(_response.read(),encoding),
+			"content":self.decodeHtml(_response.read(),encoding) if encoding else _response.read(),
 			"reason":_response.reason
 		}
 		return res
-		
+
 	def setHandler(self,handler):
 		"""" 添加/修改本对象的handler """
-		assert(isinstance(handler,request.BaseHandler))
+		assert isinstance(handler,request.BaseHandler)
 		for h in self.handlers:
 			if isinstance(h,type(handler)):
 				self.handlers.remove(h)
 		self.handlers.append(handler)
 
 	def loadCookie(self,url="",headers=None):
-		""" 
+		"""
 		从self.cookie_file加载filecookie对象,添加到self.handlers
 		通过url,headers访问一个站点获得cookie
 		"""
@@ -147,7 +146,7 @@ class WebRobot():
 		data为response html原始字节
 		返回解码后的字符字节
 		"""
-		buff = BytesIO(data) 
+		buff = BytesIO(data)
 		res = gzip.GzipFile(fileobj=buff).read()
 		return res
 
@@ -158,8 +157,8 @@ class WebRobot():
 		自动对gzip格式进行处理
 		返回解码后的字符
 		"""
-		if encoding == None:
-			encoding = self.default_encodeing
+		encoding = encoding if encoding else self.default_encodeing
+
 		res = None
 		if b'\x1f\x8b\x08\x00\x00\x00\x00' in data: # gzip
 			res = self.gzipPage(data).decode(encoding)
@@ -167,8 +166,21 @@ class WebRobot():
 			res = data.decode(encoding)
 		return res
 
+
+
+def decompose_url(url):
+	parsed_url = urlparse(url)
+	# 协议（scheme）
+	protocol = parsed_url.scheme
+	# 路径（包括目录和文件名）
+	path = parsed_url.path
+	# 从路径中提取文件名。如果路径以斜杠结尾，则认为没有单独的文件名
+	filename = path.split('/')[-1] if path.endswith('/') else path.split('/')[-1]
+	return protocol, path, filename
+
+
 def post_log(s):
 	time_tuple = time.localtime(time.time())
 	time_str = ("{}月{}日{}点{}分{}秒".format(time_tuple[1],time_tuple[2],time_tuple[3],time_tuple[4],time_tuple[5]))
 	with open("post_log.txt","a",encoding="UTF8") as f:
-		f.write(s+"\t"+time_str+"\n")
+		f.write(s + "\t" + time_str + "\n")
